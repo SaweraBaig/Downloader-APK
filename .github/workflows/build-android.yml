@@ -1,0 +1,64 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch: 
+
+jobs:
+  build-android:
+    # FORCING Ubuntu 20.04. This absolutely guarantees libtinfo5 will install.
+    runs-on: ubuntu-20.04
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Set up Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Install System Dependencies for Buildozer
+      run: |
+        sudo apt update
+        sudo apt install -y git zip unzip python3-pip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev
+        
+        # Install buildozer securely
+        pip install --upgrade buildozer virtualenv
+        pip install "Cython==0.29.33"
+
+    - name: Initialize and Configure Buildozer
+      run: |
+        buildozer init
+        
+        sed -i 's/^title = .*/title = MrBaig Downloader/' buildozer.spec
+        sed -i 's/^package.name = .*/package.name = mrbaigdl/' buildozer.spec
+        sed -i 's/^package.domain = .*/package.domain = com.zawar/' buildozer.spec
+        
+        sed -i 's/^requirements = .*/requirements = python3,kivy,yt-dlp,pillow,certifi,urllib3/' buildozer.spec
+        
+        sed -i 's/^#android.permissions = INTERNET/android.permissions = INTERNET, WRITE_EXTERNAL_STORAGE, READ_EXTERNAL_STORAGE/' buildozer.spec
+        
+        sed -i 's/^android.archs = .*/android.archs = arm64-v8a/' buildozer.spec
+        
+        sed -i 's/^#android.accept_sdk_license = False/android.accept_sdk_license = True/' buildozer.spec
+        
+        # --- NEW: Set the application icon to use icon.png from your repository ---
+        sed -i 's|^.*icon.filename = .*|icon.filename = %(source.dir)s/icon.png|' buildozer.spec
+
+    - name: Build APK with Buildozer
+      run: |
+        buildozer android debug
+
+    - name: Upload APK as Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: MrBaig-Downloader
+        path: bin/*.apk
